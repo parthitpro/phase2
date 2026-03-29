@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - OMS{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="h3 mb-4">Order Reports</h1>
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="fas fa-file-export"></i> Export Orders to Excel</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('export_reports') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" required>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label for="end_date" class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" required>
+                    </div>
+                    
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-file-excel"></i> Download Excel Report
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="fas fa-info-circle"></i> Report Contents</h5>
+        </div>
+        <div class="card-body">
+            <p>The exported Excel file will include the following columns:</p>
+            <ul>
+                <li>Order Number</li>
+                <li>Order Date</li>
+                <li>Customer Name</li>
+                <li>Customer Type (Wholesale/Retail)</li>
+                <li>Product Name</li>
+                <li>Pack Size (in kg)</li>
+                <li>Quantity (number of packs)</li>
+                <li>Total Weight (in kg)</li>
+                <li>Price per Pack</li>
+                <li>Line Total</li>
+                <li>Order Total</li>
+                <li>Order Status</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default date range (current month)
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    document.getElementById('start_date').valueAsDate = firstDay;
+    document.getElementById('end_date').valueAsDate = today;
+});
+</script>
+{% endblock %}
