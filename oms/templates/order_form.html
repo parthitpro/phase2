@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}New Order - OMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4">Create New Order</h1>
+    
+    <form method="POST" action="{{ url_for('create_order') }}" id="orderForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <!-- Customer Selection -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="fas fa-user"></i> Customer Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="customerSearch" class="form-label">Search Customer (Name or Phone)</label>
+                        <input type="text" class="form-control" id="customerSearch" placeholder="Start typing (min 3 characters)" autocomplete="off">
+                        <div id="customerSuggestions" class="list-group position-absolute w-50" style="z-index: 1000; display: none;"></div>
+                        <input type="hidden" id="customerId" name="customer_id">
+                    </div>
+                    <div class="col-md-6">
+                        <div id="selectedCustomer" class="mt-4" style="display: none;">
+                            <div class="alert alert-info">
+                                <strong>Name:</strong> <span id="customerName"></span><br>
+                                <strong>Phone:</strong> <span id="customerPhone"></span><br>
+                                <strong>Type:</strong> <span id="customerType" class="badge bg-success"></span>
+                                <span id="discountBadge" class="badge bg-warning text-dark ms-2" style="display: none;"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Products -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-box"></i> Order Items</h5>
+                <button type="button" class="btn btn-primary btn-sm" id="addProductBtn">
+                    <i class="fas fa-plus"></i> Add Product
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="productRows">
+                    <!-- Dynamic product rows will be added here -->
+                </div>
+                <div id="emptyMessage" class="text-center text-muted py-4">
+                    <i class="fas fa-shopping-basket fa-3x mb-3"></i>
+                    <p>No products added yet. Click "Add Product" to start.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Total -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-end">
+                <h4>Grand Total: <span class="text-primary">₹<span id="grandTotal">0.00</span></span></h4>
+            </div>
+        </div>
+        
+        <!-- Submit -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-success btn-lg">
+                <i class="fas fa-check-circle"></i> Create Order
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Product Row Template -->
+<template id="productRowTemplate">
+    <div class="product-row card mb-3">
+        <div class="card-body">
+            <div class="row align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Product</label>
+                    <select class="form-select product-select" required>
+                        <option value="">Select Product</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Pack Size (kg)</label>
+                    <select class="form-select pack-size-select" required disabled>
+                        <option value="">Select Product First</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Quantity (Packs)</label>
+                    <input type="number" class="form-control quantity-input" min="1" value="1" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Line Total</label>
+                    <div class="form-control-plaintext fw-bold">₹<span class="line-total">0.00</span></div>
+                </div>
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-danger btn-sm remove-product">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let products = [];
+let orderItems = [];
+
+// Load products on page load
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/get_products')
+        .then(response => response.json())
+        .then(data => {
+            products = data;
+        })
+        .catch(error => console.error('Error loading products:', error));
+});
+
+// Customer search with AJAX
+const customerSearch = document.getElementById('customerSearch');
+const customerSuggestions = document.getElementById('customerSuggestions');
+let searchTimeout;
+
+customerSearch.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+    
+    if (query.length < 3) {
+        customerSuggestions.style.display = 'none';
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        fetch(`/search_customer/${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                displayCustomerSuggestions(data);
+            })
+            .catch(error => console.error('Error searching customers:', error));
+    }, 300);
+});
+
+function displayCustomerSuggestions(customers) {
+    if (customers.length === 0) {
+        customerSuggestions.style.display = 'none';
+        return;
+    }
+    
+    customerSuggestions.innerHTML = '';
+    customers.forEach(customer => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'list-group-item list-group-item-action';
+        item.innerHTML = `<strong>${customer.name}</strong><br><small>${customer.phone}</small>`;
+        item.addEventListener('click', () => selectCustomer(customer));
+        customerSuggestions.appendChild(item);
+    });
+    
+    customerSuggestions.style.display = 'block';
+}
+
+function selectCustomer(customer) {
+    document.getElementById('customerId').value = customer.id;
+    document.getElementById('customerSearch').value = `${customer.name} (${customer.phone})`;
+    customerSuggestions.style.display = 'none';
+    
+    // Display selected customer info
+    document.getElementById('selectedCustomer').style.display = 'block';
+    document.getElementById('customerName').textContent = customer.name;
+    document.getElementById('customerPhone').textContent = customer.phone;
+    
+    const typeBadge = document.getElementById('customerType');
+    typeBadge.textContent = customer.type.toUpperCase();
+    typeBadge.className = `badge ${customer.type === 'wholesale' ? 'bg-success' : 'bg-secondary'}`;
+    
+    const discountBadge = document.getElementById('discountBadge');
+    if (customer.type === 'wholesale') {
+        discountBadge.textContent = `${customer.discount || 15}% Discount`;
+        discountBadge.style.display = 'inline-block';
+    } else {
+        discountBadge.style.display = 'none';
+    }
+}
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    if (!customerSearch.contains(e.target) && !customerSuggestions.contains(e.target)) {
+        customerSuggestions.style.display = 'none';
+    }
+});
+
+// Add product row
+document.getElementById('addProductBtn').addEventListener('click', function() {
+    const template = document.getElementById('productRowTemplate');
+    const clone = template.content.cloneNode(true);
+    const row = clone.querySelector('.product-row');
+    
+    // Populate product dropdown
+    const productSelect = row.querySelector('.product-select');
+    products.forEach(product => {
+        const option = document.createElement('option');
+        option.value = product.id;
+        option.textContent = `${product.name} (₹${product.retail_price}/kg)`;
+        option.dataset.prices = JSON.stringify(product.pack_sizes);
+        productSelect.appendChild(option);
+    });
+    
+    // Event listeners
+    productSelect.addEventListener('change', function() {
+        const productId = this.value;
+        const packSizeSelect = row.querySelector('.pack-size-select');
+        const product = products.find(p => p.id == productId);
+        
+        if (product) {
+            packSizeSelect.innerHTML = '<option value="">Select Pack Size</option>';
+            product.pack_sizes.forEach(size => {
+                const option = document.createElement('option');
+                option.value = size;
+                option.textContent = `${(size * 1000)}g - ₹${(product.retail_price * size).toFixed(2)}`;
+                packSizeSelect.appendChild(option);
+            });
+            packSizeSelect.disabled = false;
+        } else {
+            packSizeSelect.innerHTML = '<option value="">Select Product First</option>';
+            packSizeSelect.disabled = true;
+        }
+    });
+    
+    packSizeSelect = row.querySelector('.pack-size-select');
+    packSizeSelect.addEventListener('change', () => calculateLineTotal(row));
+    
+    const quantityInput = row.querySelector('.quantity-input');
+    quantityInput.addEventListener('input', () => calculateLineTotal(row));
+    
+    row.querySelector('.remove-product').addEventListener('click', function() {
+        row.remove();
+        updateGrandTotal();
+        checkEmptyMessage();
+    });
+    
+    document.getElementById('productRows').appendChild(row);
+    checkEmptyMessage();
+});
+
+function calculateLineTotal(row) {
+    const productId = row.querySelector('.product-select').value;
+    const packSize = parseFloat(row.querySelector('.pack-size-select').value) || 0;
+    const quantity = parseInt(row.querySelector('.quantity-input').value) || 0;
+    
+    const product = products.find(p => p.id == productId);
+    if (product && packSize > 0 && quantity > 0) {
+        let price = product.retail_price * packSize;
+        
+        // Apply wholesale discount if customer is wholesale
+        const customerId = document.getElementById('customerId').value;
+        if (customerId) {
+            // We need to get customer type - simplified for now
+            // In production, store customer type in a data attribute
+        }
+        
+        const lineTotal = price * quantity;
+        row.querySelector('.line-total').textContent = lineTotal.toFixed(2);
+    } else {
+        row.querySelector('.line-total').textContent = '0.00';
+    }
+    
+    updateGrandTotal();
+}
+
+function updateGrandTotal() {
+    let total = 0;
+    document.querySelectorAll('.line-total').forEach(span => {
+        total += parseFloat(span.textContent) || 0;
+    });
+    document.getElementById('grandTotal').textContent = total.toFixed(2);
+}
+
+function checkEmptyMessage() {
+    const emptyMsg = document.getElementById('emptyMessage');
+    const rows = document.querySelectorAll('.product-row');
+    emptyMsg.style.display = rows.length === 0 ? 'block' : 'none';
+}
+
+// Form submission
+document.getElementById('orderForm').addEventListener('submit', function(e) {
+    const customerId = document.getElementById('customerId').value;
+    if (!customerId) {
+        e.preventDefault();
+        alert('Please select a customer');
+        return;
+    }
+    
+    const rows = document.querySelectorAll('.product-row');
+    if (rows.length === 0) {
+        e.preventDefault();
+        alert('Please add at least one product');
+        return;
+    }
+    
+    const items = [];
+    rows.forEach(row => {
+        const productId = row.querySelector('.product-select').value;
+        const packSize = row.querySelector('.pack-size-select').value;
+        const quantity = row.querySelector('.quantity-input').value;
+        
+        if (productId && packSize && quantity) {
+            items.push({
+                product_id: productId,
+                pack_size: packSize,
+                quantity: quantity
+            });
+        }
+    });
+    
+    if (items.length === 0) {
+        e.preventDefault();
+        alert('Please fill all product details');
+        return;
+    }
+    
+    // Add items as hidden field
+    const itemsInput = document.createElement('input');
+    itemsInput.type = 'hidden';
+    itemsInput.name = 'items';
+    itemsInput.value = JSON.stringify(items);
+    this.appendChild(itemsInput);
+});
+</script>
+{% endblock %}

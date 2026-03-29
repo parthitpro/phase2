@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}View Order - {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Order Details - {{ order.order_number }}</h1>
+        <a href="{{ url_for('print_order', order_id=order.id) }}" class="btn btn-primary">
+            <i class="fas fa-print"></i> Print Delivery Slip
+        </a>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Customer Information</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        <strong>Name:</strong> {{ order.customer.name }}<br>
+                        <strong>Phone:</strong> {{ order.customer.phone_primary }}<br>
+                        {% if order.customer.phone_secondary %}
+                        <strong>Secondary Phone:</strong> {{ order.customer.phone_secondary }}<br>
+                        {% endif %}
+                        <strong>Type:</strong> 
+                        <span class="badge bg-{{ 'success' if order.customer.type == 'wholesale' else 'secondary' }}">
+                            {{ order.customer.type.upper() }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Order Information</h5>
+                </div>
+                <div class="card-body">
+                    <p>
+                        <strong>Order Number:</strong> {{ order.order_number }}<br>
+                        <strong>Order Date:</strong> {{ order.order_date.strftime('%d-%m-%Y %H:%M') }}<br>
+                        <strong>Status:</strong> 
+                        <span class="badge bg-{{ 'success' if order.status == 'printed' else ('info' if order.status == 'delivered' else 'warning') }}">
+                            {{ order.status.upper() }}
+                        </span><br>
+                        <strong>Created By:</strong> {{ order.creator.email }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">Order Items</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Product</th>
+                            <th>Pack Size</th>
+                            <th>Quantity (Packs)</th>
+                            <th>Total Weight</th>
+                            <th>Price/Pack</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ item.product.name }}</td>
+                            <td>{{ (item.pack_size_selected|float * 1000)|int }}g</td>
+                            <td>{{ item.quantity_packs }}</td>
+                            <td>{{ item.total_weight }} kg</td>
+                            <td>₹{{ "%.2f"|format(item.price_at_purchase) }}</td>
+                            <td>₹{{ "%.2f"|format(item.line_total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="6" class="text-end"><strong>Grand Total:</strong></td>
+                            <td><strong>₹{{ "%.2f"|format(order.total_amount) }}</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}
