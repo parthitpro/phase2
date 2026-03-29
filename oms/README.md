@@ -65,26 +65,25 @@ oms/
    pip install flask flask-sqlalchemy flask-login flask-wtf pymysql pandas openpyxl werkzeug
    ```
 
-3. **Configure MySQL**:
-   ```sql
-   CREATE DATABASE oms_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   CREATE USER 'oms_user'@'localhost' IDENTIFIED BY 'secure_password';
-   GRANT ALL PRIVILEGES ON oms_db.* TO 'oms_user'@'localhost';
-   FLUSH PRIVILEGES;
-   ```
-
-4. **Set environment variables**:
+3. **Set environment variables** (optional - defaults provided):
    ```bash
-   export DATABASE_URL="mysql+pymysql://oms_user:secure_password@localhost/oms_db"
+   export DATABASE_URL="mysql+pymysql://root:password@localhost/oms_db"
    export SECRET_KEY="your-secret-key-change-in-production"
    ```
+   
+   > **Note**: If you don't set DATABASE_URL, the app will use `mysql+pymysql://root:password@localhost/oms_db` by default. Make sure your MySQL root password matches, or update the URL accordingly.
 
-5. **Run the application**:
+4. **Run the application**:
    ```bash
    python app.py
    ```
-
-6. **Access the application**:
+   
+   > The app will automatically:
+   > - Create the database if it doesn't exist
+   > - Create all tables
+   > - Seed the admin user and initial products
+   
+5. **Access the application**:
    - URL: http://localhost:5000
    - Default admin: `admin@oms.com` / `admin123`
 
