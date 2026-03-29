@@ -59,12 +59,18 @@ def ensure_database_exists(db_uri):
 def create_app():
     app = Flask(__name__)
     
-    # Configuration
+    # Configuration - Use SQLite by default for easy setup
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-        'DATABASE_URL', 
-        'mysql+pymysql://root:password@localhost/oms_db'
-    )
+    db_uri = os.environ.get('DATABASE_URL')
+    
+    if db_uri:
+        # Use provided database URL (MySQL or other)
+        app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+    else:
+        # Default to SQLite for zero-config setup
+        basedir = os.path.abspath(os.path.dirname(__file__))
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'oms.db')
+    
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(app.instance_path, 'uploads')
     app.config['BACKUP_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
@@ -581,18 +587,6 @@ def seed_products(app):
 
 
 if __name__ == '__main__':
-    # Get database URI and ensure database exists
-    db_uri = os.environ.get(
-        'DATABASE_URL', 
-        'mysql+pymysql://root:password@localhost/oms_db'
-    )
-    
-    # Auto-create database if it doesn't exist
-    db_uri = ensure_database_exists(db_uri)
-    
-    # Set the URI for the app to use
-    os.environ['DATABASE_URL'] = db_uri
-    
     app = create_app()
     
     # Create tables and seed data
