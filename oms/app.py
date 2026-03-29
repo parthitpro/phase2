@@ -2,6 +2,7 @@
 Order Management System - Main Application
 """
 import os
+import re
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_wtf import CSRFProtect
@@ -10,9 +11,49 @@ from datetime import datetime, timedelta
 import pandas as pd
 import json
 from functools import wraps
+from sqlalchemy import create_engine, text
 
 from models import db, User, Customer, Product, Order, OrderItem
 from utils import process_contact_upload
+
+
+def ensure_database_exists(db_uri):
+    """
+    Extract database name from URI and create it if it doesn't exist.
+    This allows running 'python app.py' without manual DB setup.
+    """
+    # Parse the database URI
+    # Format: mysql+pymysql://user:pass@host/dbname
+    pattern = r'^mysql\+pymysql://([^:]+):([^@]+)@([^/]+)/(.+)$'
+    match = re.match(pattern, db_uri)
+    
+    if not match:
+        # If no match, assume DB already exists or using SQLite
+        return db_uri
+    
+    user, password, host, dbname = match.groups()
+    
+    # Create engine without database to create the database
+    base_uri = f'mysql+pymysql://{user}:{password}@{host}'
+    engine = create_engine(base_uri)
+    
+    try:
+        with engine.connect() as conn:
+            # Check if database exists
+            result = conn.execute(text(f"SHOW DATABASES LIKE '{dbname}'"))
+            if not result.fetchone():
+                # Create database with UTF-8 encoding
+                conn.execute(text(
+                    f"CREATE DATABASE `{dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                ))
+                print(f"Database '{dbname}' created successfully!")
+            else:
+                print(f"Database '{dbname}' already exists.")
+    except Exception as e:
+        print(f"Warning: Could not verify/create database: {e}")
+    
+    engine.dispose()
+    return db_uri
 
 
 def create_app():
@@ -540,9 +581,21 @@ def seed_products(app):
 
 
 if __name__ == '__main__':
+    # Get database URI and ensure database exists
+    db_uri = os.environ.get(
+        'DATABASE_URL', 
+        'mysql+pymysql://root:password@localhost/oms_db'
+    )
+    
+    # Auto-create database if it doesn't exist
+    db_uri = ensure_database_exists(db_uri)
+    
+    # Set the URI for the app to use
+    os.environ['DATABASE_URL'] = db_uri
+    
     app = create_app()
     
-    # Create tables
+    # Create tables and seed data
     with app.app_context():
         db.create_all()
         seed_admin_user(app)
