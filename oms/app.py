@@ -14,7 +14,6 @@ from functools import wraps
 from sqlalchemy import create_engine, text
 
 from models import db, User, Customer, Product, Order, OrderItem
-from utils import process_contact_upload
 
 
 def ensure_database_exists(db_uri):
@@ -156,13 +155,6 @@ def create_app():
             Order.order_date >= month_start
         ).distinct(Order.customer_id).count()
         
-        # Pending contacts for review (admin only)
-        pending_contacts = 0
-        if current_user.role == 'admin':
-            pending_contacts = Customer.query.filter_by(
-                contact_update_status='pending_review'
-            ).count()
-        
         # Unprinted orders
         unprinted_orders = Order.query.filter_by(status='pending').count()
         
@@ -181,7 +173,6 @@ def create_app():
             total_orders=total_orders,
             total_revenue=total_revenue,
             active_customers=active_customers,
-            pending_contacts=pending_contacts,
             unprinted_orders=unprinted_orders,
             chart_data=json.dumps(chart_data)
         )
@@ -333,86 +324,6 @@ def create_app():
         db.session.commit()
         flash('Order marked as printed', 'success')
         return redirect(url_for('view_order', order_id=order.id))
-    
-    @app.route('/upload_contacts', methods=['GET', 'POST'])
-    @login_required
-    @role_required('admin')
-    def upload_contacts():
-        if request.method == 'POST':
-            if 'file' not in request.files:
-                flash('No file uploaded', 'error')
-                return redirect(request.url)
-            
-            file = request.files['file']
-            if file.filename == '':
-                flash('No file selected', 'error')
-                return redirect(request.url)
-            
-            if file and file.filename.endswith('.csv'):
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                
-                try:
-                    # Process the CSV
-                    from models import Customer
-                    results = process_contact_upload(filepath, db.session, Customer)
-                    
-                    flash(
-                        f"Import complete! New: {results['new']}, "
-                        f"Pending Review: {results['updates_pending']}, "
-                        f"Unchanged: {results['unchanged']}",
-                        'success'
-                    )
-                except Exception as e:
-                    flash(f'Error processing file: {str(e)}', 'error')
-                finally:
-                    # Clean up uploaded file
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
-                
-                return redirect(url_for('review_contacts'))
-            else:
-                flash('Please upload a CSV file', 'error')
-        
-        return render_template('upload_contacts.html')
-    
-    @app.route('/review_contacts')
-    @login_required
-    @role_required('admin')
-    def review_contacts():
-        pending = Customer.query.filter_by(
-            contact_update_status='pending_review'
-        ).all()
-        return render_template('review_contacts.html', contacts=pending)
-    
-    @app.route('/contact/<int:contact_id>/approve', methods=['POST'])
-    @login_required
-    @role_required('admin')
-    def approve_contact(contact_id):
-        contact = Customer.query.get_or_404(contact_id)
-        
-        # Get the new name from the form (could be passed as hidden field)
-        new_name = request.form.get('new_name', contact.name)
-        contact.name = new_name.title()
-        contact.contact_update_status = 'approved'
-        contact.last_updated = datetime.utcnow()
-        db.session.commit()
-        
-        flash('Contact approved and updated', 'success')
-        return redirect(url_for('review_contacts'))
-    
-    @app.route('/contact/<int:contact_id>/reject', methods=['POST'])
-    @login_required
-    @role_required('admin')
-    def reject_contact(contact_id):
-        contact = Customer.query.get_or_404(contact_id)
-        contact.contact_update_status = 'approved'  # Keep old name
-        contact.last_updated = datetime.utcnow()
-        db.session.commit()
-        
-        flash('Contact update rejected, kept original name', 'success')
-        return redirect(url_for('review_contacts'))
     
     @app.route('/products')
     @login_required
